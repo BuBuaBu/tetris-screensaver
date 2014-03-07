@@ -78,75 +78,84 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 + * implied warranty.
 + */
 +
-+#ifndef STANDALONE_TETRIS
 +#include "screenhackI.h"
 +#include "config.h"
-+#endif
 +
-+
-+#include <stdio.h>
-+#include <stdlib.h>
-+#include <string.h>
-+#include <unistd.h>
++#include <stdarg.h>
 +#include <limits.h>
-+#include <GL/glx.h>
-+#ifdef STANDALONE_TETRIS
-+#include <GL/glut.h>
-+#endif
-+#ifndef STANDALONE_TETRIS
 +#include "xlockmore.h"
-+#include "glxfonts.h"
-+#endif
-+#include "time.h"
 +#include "tetris.h"
 +
 +#define DEFAULTS	"*delay:	00000       \n" \
-+			"*count:        30          \n" \
 +			"*showFPS:      True       \n" \
-+			"*wireframe:    False       \n" \
 +
 +# define refresh_tetris 0
-+# define release_tetris 0
 +
-+#ifndef STANDALONE_TETRIS
 +ENTRYPOINT ModeSpecOpt tetris_opts = {0, NULL, 0, NULL, NULL};
-+#endif
 +
-+ENV *tmpEnv=NULL;
++static tetrisstruct *tetris=NULL;
 +
-+static int holesShadowed(int stack[WIDTH][HEIGHT]){
++static int count_holes_shadowed(int stack[WIDTH][HEIGHT])
++{
 +	int i,j;
-+	int nbShadow=0;
-+	for(i=0; i<WIDTH; i++, j=0){
-+		while(!stack[i][j] && j<HEIGHT){
++	int nb_shadow=0;
++	for (i=0; i<WIDTH; i++, j=0)
++	{
++		while (!stack[i][j] && j<HEIGHT)
++		{
 +			j++;
 +		}
-+		for(; j<HEIGHT; j++){
-+			if(!stack[i][j]){
-+				nbShadow++;
++		for (; j<HEIGHT; j++)
++		{
++			if (!stack[i][j])
++			{
++				nb_shadow++;
 +			}
 +		}
 +	}
-+	return nbShadow;
++	return nb_shadow;
 +}
 +
-+static int stackHeight(int stack[WIDTH][HEIGHT], BLOCK *bl){
++static int count_stack_height(int stack[WIDTH][HEIGHT], t_piece *piece)
++{
 +	int i, j, k;
 +	int height=0;
-+	if(bl->i<0){
++	if (piece->i < 0)
++	{
 +		k=0;
 +	}
-+	else{
-+		k=bl->i;
++	else
++	{
++		k=piece->i;
 +	}
 +
-+	for(j=0; j<HEIGHT; j++){
-+		for(i=0; (i<4)&&((i+k)<WIDTH); i++){
-+			if(stack[i+k][j]){
-+				if(((bl->i)>0)&&(bl->bl[i][0] || bl->bl[i][1] || bl->bl[i][2] || bl->bl[i][3]) ){
++	for (j=0; j<HEIGHT; j++)
++	{
++		for (i=0; (i<4)&&((i+k)<WIDTH); i++)
++		{
++			if (stack[i+k][j])
++			{
++				if
++				(
++					(piece->i > 0) && 
++					(
++						piece->blocks[i][0] ||
++						piece->blocks[i][1] ||
++						piece->blocks[i][2] ||
++						piece->blocks[i][3]
++					)
++				)
++				{
 +					return (HEIGHT-j);
 +				}
-+				else if(bl->bl[i-bl->i][0] || bl->bl[i-bl->i][1] || bl->bl[i-bl->i][2] || bl->bl[i-bl->i][3]){
++				else if
++				(
++					piece->blocks[i-piece->i][0] ||
++					piece->blocks[i-piece->i][1] ||
++					piece->blocks[i-piece->i][2] ||
++					piece->blocks[i-piece->i][3]
++				)
++				{
 +					return (HEIGHT-j);
 +				}
 +			}
@@ -155,27 +164,37 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +	return height;
 +}
 +
-+static int wellDepth(int stack[WIDTH][HEIGHT]){
++static int count_well_depth(int stack[WIDTH][HEIGHT])
++{
 +	int i, j, k;
 +	int depth=0;
 +	
-+	for(j=0; j<HEIGHT; j++){
-+		if(!stack[0][j] && stack[1][j]){
++	for (j=0; j<HEIGHT; j++)
++	{
++		if (!stack[0][j] && stack[1][j])
++		{
 +			depth++;
-+			for(k=j+1; k<HEIGHT; k++){
-+				if(!stack[0][k] && stack[1][k]){
++			for (k=j+1; k<HEIGHT; k++)
++			{
++				if (!stack[0][k] && stack[1][k])
++				{
 +					depth++;
 +				}
 +			}
 +		}
 +	}
 +
-+	for(i=1; i<WIDTH-1; i++){
-+		for(j=0; j<HEIGHT; j++){
-+			if(!stack[i][j] && stack[i-1][j] && stack[i+1][j]){
++	for (i=1; i<WIDTH-1; i++)
++	{
++		for (j=0; j<HEIGHT; j++)
++		{
++			if (!stack[i][j] && stack[i-1][j] && stack[i+1][j])
++			{
 +				depth++;
-+				for(k=j+1; k<HEIGHT; k++){
-+					if(!stack[i][k] && stack[i-1][k] && stack[i+1][k]){
++				for (k=j+1; k<HEIGHT; k++)
++				{
++					if (!stack[i][k] && stack[i-1][k] && stack[i+1][k])
++					{
 +						depth++;
 +					}
 +				}
@@ -183,11 +202,15 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +		}
 +	}
 +
-+	for(j=0; j<HEIGHT; j++){
-+		if(!stack[WIDTH-1][j] && stack[WIDTH-2][j]){
++	for (j=0; j<HEIGHT; j++)
++	{
++		if (!stack[WIDTH-1][j] && stack[WIDTH-2][j])
++		{
 +			depth++;
-+			for(k=j+1; k<HEIGHT; k++){
-+				if(!stack[WIDTH-1][k] && stack[WIDTH-2][k]){
++			for (k=j+1; k<HEIGHT; k++)
++			{
++				if (!stack[WIDTH-1][k] && stack[WIDTH-2][k])
++				{
 +					depth++;
 +				}
 +			}
@@ -197,52 +220,66 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +	return depth;
 +}
 +
-+static int calcLineTransition(int stack[WIDTH][HEIGHT]){
-+	int tr=0;
++static int count_line_transition(int stack[WIDTH][HEIGHT])
++{
++	int transition=0;
 +	int i,j;
 +	
-+	for(j=0; j<HEIGHT-1; j++){
-+		for(i=0; i<WIDTH; i++){
-+			if(stack[i][j] && !stack[i][j+1]){
-+				tr++;
++	for (j=0; j<HEIGHT-1; j++)
++	{
++		for (i=0; i<WIDTH; i++)
++		{
++			if (stack[i][j] && !stack[i][j+1])
++			{
++				transition++;
 +			}
 +		}
 +	}
 +
-+	for(i=0; i<WIDTH; i++){
-+		if(!stack[i][HEIGHT-1]){
-+			tr++;
++	for (i=0; i<WIDTH; i++)
++	{
++		if (!stack[i][HEIGHT-1])
++		{
++			transition++;
 +		}
 +	}
 +	
-+	return tr;
++	return transition;
 +}
 +
-+static int calcRowTransition(int stack[WIDTH][HEIGHT]){
-+	int tr=0;
++static int count_row_transition(int stack[WIDTH][HEIGHT])
++{
++	int transition=0;
 +	int i,j;
 +	
-+	for(j=0; j<HEIGHT; j++){
-+		if(!stack[0][j]){
-+			tr++;
++	for (j=0; j<HEIGHT; j++)
++	{
++		if (!stack[0][j])
++		{
++			transition++;
 +		}
 +	}
 +
-+	for(i=0; i<WIDTH-1; i++){
-+		for(j=0; j<HEIGHT; j++){
-+			if(stack[i][j] && !stack[i+1][j]){
-+				tr++;
++	for (i=0; i<WIDTH-1; i++)
++	{
++		for (j=0; j<HEIGHT; j++)
++		{
++			if (stack[i][j] && !stack[i+1][j])
++			{
++				transition++;
 +			}
 +		}
 +	}
 +
-+	for(j=0; j<HEIGHT; j++){
-+		if(!stack[WIDTH-1][j]){
-+			tr++;
++	for (j=0; j<HEIGHT; j++)
++	{
++		if (!stack[WIDTH-1][j])
++		{
++			transition++;
 +		}
 +	}
 +	
-+	return tr;
++	return transition;
 +}
 +
 +/*
@@ -254,87 +291,103 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 + * WELL_SUMS_DELLACHERIE	-1	for each well, a value depending on the well depth
 + */
 +
-+static int calcScore(ENV *env, BLOCK *bl){
-+	int theScore;
-+	int nm;
++static int compute_score(tetrisstruct *env, t_piece *piece)
++{
++	int score;
++	int eroded_pieces;
 +
-+	nm=fix(env, bl, 1);
++	eroded_pieces = fix_piece(env, piece, 1);
 +
-+	theScore  = -1 * stackHeight(env->tmpStack, bl);
-+	theScore +=  1 * nm;
-+	theScore += -1 * calcRowTransition(env->tmpStack);
-+	theScore += -1 * calcLineTransition(env->tmpStack);;
-+	theScore += -4 * holesShadowed(env->tmpStack);
-+	theScore += -1 * wellDepth(env->tmpStack);
++	score  = -1 * count_stack_height(env->tmp_stack, piece);
++	score +=  1 * eroded_pieces;
++	score += -1 * count_row_transition(env->tmp_stack);
++	score += -1 * count_line_transition(env->tmp_stack);
++	score += -4 * count_holes_shadowed(env->tmp_stack);
++	score += -1 * count_well_depth(env->tmp_stack);
 +
-+	return theScore;
++	return score;
 +}
 +
-+static void bestMove(ENV *env, MOVE *theBestMove){
-+	BLOCK curBl, curBl2;
-+	int r;
-+	int curScore, bestScore;
-+	int t2=0;
++static void compute_best_move(tetrisstruct *env, t_move *best_move)
++{
++	t_piece current_piece, next_piece;
++	int rotation, translation = 0;
++	int current_score, best_score;
 +
-+	curBl.i=env->mainBl.i;
-+	curBl.j=env->mainBl.j;
-+	memcpy(curBl.bl, env->mainBl.bl, sizeof(curBl.bl));
++	current_piece.i = env->current_piece.i;
++	current_piece.j = env->current_piece.j;
++	memcpy(current_piece.blocks, env->current_piece.blocks, sizeof(current_piece.blocks));
 +
-+	curBl2.i=env->nextBl.i;
-+	curBl2.j=env->nextBl.j;
-+	memcpy(curBl2.bl, env->nextBl.bl, sizeof(curBl2.bl));
++	next_piece.i=env->next_piece.i;
++	next_piece.j=env->next_piece.j;
++	memcpy(next_piece.blocks, env->next_piece.blocks, sizeof(next_piece.blocks));
 +	
-+	bestScore=INT_MIN;
++	best_score=INT_MIN;
 +	/* try rotation */
-+	for(r=0; r<4; r++){
++	for (rotation=0; rotation<4; rotation++)
++	{
 +		/* start in the left side */
-+		while(!move(env->stack, &curBl, LEFT));
++		while (!move(env->stack, &current_piece, LEFT));
 +		/* try all move to RIGHT */
-+		do{
-+			while(!move(env->stack, &curBl, DOWN));
-+			curBl2.i=curBl.i;
-+			curBl2.j=curBl.j;
-+			memcpy(curBl2.bl, curBl.bl, sizeof(curBl2.bl));
++		do
++		{
++			while (!move(env->stack, &current_piece, DOWN));
 +
-+			t2=0;
-+			while(!move(env->stack, &curBl2, LEFT) && move(env->stack, &curBl2, DOWN)){
-+				t2--;
++			next_piece.i=current_piece.i;
++			next_piece.j=current_piece.j;
++			memcpy(next_piece.blocks, current_piece.blocks, sizeof(next_piece.blocks));
++
++			translation = 0;
++			while (!move(env->stack, &next_piece, LEFT) && move(env->stack, &next_piece, DOWN))
++			{
++				translation--;
 +			}
 +			
-+			curBl2.i=curBl.i+t2; 
-+			curBl2.j=curBl.j;
-+			do{
-+				curScore=calcScore(env, &curBl2);
-+				if(curScore==bestScore && (t2*t2 < theBestMove->t2*theBestMove->t2)){
-+					theBestMove->r=r;
-+					theBestMove->t=curBl.i-env->mainBl.i;
-+					theBestMove->t2=t2;
++			next_piece.i=current_piece.i+translation; 
++			next_piece.j=current_piece.j;
++			do
++			{
++				current_score=compute_score(env, &next_piece);
++				if (current_score == best_score && (translation*translation < best_move->t2*best_move->t2))
++				{
++					best_move->r=rotation;
++					best_move->t=current_piece.i-env->current_piece.i;
++					best_move->t2=translation;
 +				}
-+				if(curScore>bestScore){
-+					bestScore=curScore;
-+					theBestMove->r=r;
-+					theBestMove->t=curBl.i-env->mainBl.i;
-+					theBestMove->t2=t2;
++				if (current_score > best_score)
++				{
++					best_score=current_score;
++					best_move->r=rotation;
++					best_move->t=current_piece.i-env->current_piece.i;
++					best_move->t2=translation;
 +				}
-+				t2++;
-+			}while(!move(env->stack, &curBl2, RIGHT) && move(env->stack, &curBl2, DOWN));
-+			curBl.j=env->mainBl.j;
-+		}while(!move(env->stack, &curBl, RIGHT));
-+		curBl.i=env->mainBl.i;
-+		move(env->stack, &curBl, ROT);
++				translation++;
++			} while (!move(env->stack, &next_piece, RIGHT) && move(env->stack, &next_piece, DOWN));
++
++			current_piece.j=env->current_piece.j;
++		} while (!move(env->stack, &current_piece, RIGHT));
++
++		current_piece.i=env->current_piece.i;
++		move(env->stack, &current_piece, ROT);
 +	}
 +}
 +
-+static int try(int stack[WIDTH][HEIGHT], BLOCK *bl){
++static int check_collision(int stack[WIDTH][HEIGHT], t_piece *piece)
++{
 +	int i,j;
-+	for(i=0; i<4; i++){
-+		for(j=0; j<4; j++){
-+			if(bl->bl[i][j] &&
-+				(	(i+bl->i)<0 ||
-+					(i+bl->i)>(WIDTH-1) ||
-+					(j+bl->j)>(HEIGHT-1) ||
-+					stack[i+bl->i][j+bl->j])
-+				){
++	for (i=0; i<4; i++)
++	{
++		for (j=0; j<4; j++)
++		{
++			if (
++					piece->blocks[i][j] &&
++					(	(i+piece->i)<0 ||
++						(i+piece->i)>(WIDTH-1) ||
++						(j+piece->j)>(HEIGHT-1) ||
++						stack[i+piece->i][j+piece->j]
++					)
++				)
++			{
 +				return 1;
 +			}
 +		}
@@ -342,84 +395,100 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +	return 0;
 +}
 +
-+static void copyBlock(BLOCK *dest, BLOCK *src){
++static void copy_piece(t_piece *dest, t_piece *src)
++{
 +	dest->i=src->i;
 +	dest->j=src->j;
-+	memcpy(dest->bl, src->bl, sizeof(dest->bl));
++	memcpy(dest->blocks, src->blocks, sizeof(dest->blocks));
 +	dest->moves.ready=src->moves.ready;
 +	dest->moves.r=src->moves.r;
 +	dest->moves.t=src->moves.t;
 +}
 +
-+static void newBlock(BLOCK *bl){
++static void new_piece(t_piece *piece)
++{
 +	int rd;
 +
-+#ifndef STANDALONE_TETRIS
 +	rd=(int)( 7.0 * random() / ( RAND_MAX + 1.0 ) );
-+#else
-+	rd=(int)( 7.0 * rand() / ( RAND_MAX + 1.0 ) );
-+#endif
-+	bl->i=3;
-+	bl->j=0;
-+	memcpy(bl->bl, lbl[rd], sizeof(bl->bl));
-+	bl->moves.ready=0;
++	piece->i=3;
++	piece->j=0;
++	memcpy(piece->blocks, lbl[rd], sizeof(piece->blocks));
++	piece->moves.ready=0;
 +}
 +
-+static int fix(ENV *env, BLOCK *bl, int tmp){
++static int fix_piece(tetrisstruct *env, t_piece *piece, int tmp)
++{
 +	int i,j,k;
 +	int line;
-+	int nbline=0;
++	int nb_line=0;
 +	int (*stack)[WIDTH][HEIGHT];
 +	int cells=0;
 +
-+	if(tmp){
-+		memcpy(env->tmpStack, env->stack, sizeof(env->tmpStack));
-+		stack=&(env->tmpStack);
++	if (tmp)
++	{
++		memcpy(env->tmp_stack, env->stack, sizeof(env->tmp_stack));
++		stack=&(env->tmp_stack);
 +	}
-+	else{
++	else
++	{
 +		stack=&(env->stack);
 +	}
 +
-+	for(i=0; i<4; i++){
-+		for(j=0; j<4; j++){
-+			if(bl->bl[i][j]){
-+				if(tmp){
-+					(*stack)[i+bl->i][j+bl->j] = -1;
++	for (i=0; i<4; i++)
++	{
++		for (j=0; j<4; j++)
++		{
++			if (piece->blocks[i][j])
++			{
++				if (tmp)
++				{
++					(*stack)[i+piece->i][j+piece->j] = -1;
 +				}
-+				else{
-+					(*stack)[i+bl->i][j+bl->j] = bl->bl[i][j];
++				else
++				{
++					(*stack)[i+piece->i][j+piece->j] = piece->blocks[i][j];
 +				}
 +			}
 +		}
 +	}
-+	for(j=0; j<HEIGHT; j++){
++	for (j=0; j<HEIGHT; j++)
++	{
 +		line=1;
-+		for(i=0; i<WIDTH; i++){
-+			if(!(*stack)[i][j]){
++		for (i=0; i<WIDTH; i++)
++		{
++			if (!(*stack)[i][j])
++			{
 +				line=0;
 +				break;
 +			}
 +		}
-+		if(line){
-+			nbline++;
-+			for(k=j; k>0; k--){
-+				for(i=0; i<WIDTH; i++){
-+					if(tmp && (*stack)[i][k]==-1){
++		if (line)
++		{
++			nb_line++;
++			for (k=j; k>0; k--)
++			{
++				for (i=0; i<WIDTH; i++)
++				{
++					if (tmp && (*stack)[i][k]==-1)
++					{
 +						cells++;
 +					}
 +					(*stack)[i][k]=(*stack)[i][k-1];
 +				}
 +			}
-+			for(i=0; i<WIDTH; i++){
++			for (i=0; i<WIDTH; i++)
++			{
 +				(*stack)[i][0]=0;
 +			}
 +		}
 +	}
 +
-+	if(!tmp){
-+		copyBlock(&(env->mainBl), &(env->nextBl));
-+		newBlock(&(env->nextBl));
-+		switch(nbline){
++	if (!tmp)
++	{
++		copy_piece(&(env->current_piece), &(env->next_piece));
++		new_piece(&(env->next_piece));
++		switch (nb_line)
++		{
 +			case 0:
 +				break;
 +			case 1:
@@ -436,51 +505,58 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +				break;
 +		}
 +
-+		env->totline+=nbline;
++		env->totline+=nb_line;
 +	}
-+	if(tmp){
-+		nbline*=cells;
++	if (tmp)
++	{
++		nb_line*=cells;
 +	}
-+	return nbline;
++	return nb_line;
 +}
 +
-+static int move(int stack[WIDTH][HEIGHT], BLOCK *bl, int dir){
++static int move(int stack[WIDTH][HEIGHT], t_piece *piece, t_direction direction)
++{
 +	int ret=0;
 +	int i,j;
-+	int tmpBl[4][4];
++	int next_piece[4][4];
 +
-+	switch(dir){
++	switch (direction)
++	{
 +		case RIGHT:
-+			bl->i++;
++			piece->i++;
 +			break;
 +		case LEFT:
-+			bl->i--;
++			piece->i--;
 +			break;
 +		case DOWN:
-+			bl->j++;
++			piece->j++;
 +			break;
 +		case ROT:
-+			memcpy(tmpBl, bl->bl, sizeof(tmpBl));
-+			for(i=0; i<4; i++){
-+				for(j=0; j<4; j++){
-+					bl->bl[i][j]=tmpBl[j][3-i];
++			memcpy(next_piece, piece->blocks, sizeof(next_piece));
++			for (i=0; i<4; i++)
++			{
++				for (j=0; j<4; j++)
++				{
++					piece->blocks[i][j]=next_piece[j][3-i];
 +				}
 +			}
 +			break;
 +	}
-+	if(try(stack, bl)){
-+		switch(dir){
++	if (check_collision(stack, piece))
++	{
++		switch (direction)
++		{
 +			case RIGHT:
-+				bl->i--;
++				piece->i--;
 +				break;
 +			case LEFT:
-+				bl->i++;
++				piece->i++;
 +				break;
 +			case DOWN:
-+				bl->j--;
++				piece->j--;
 +				break;
 +			case ROT:
-+				memcpy(bl->bl, tmpBl, sizeof(bl->bl));
++				memcpy(piece->blocks, next_piece, sizeof(piece->blocks));
 +				break;
 +		}
 +		ret=1;
@@ -489,169 +565,312 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +	return ret;
 +}
 +
-+static int next(ENV *env){
++static int next(tetrisstruct *env)
++{
 +
 +	int ret=0;
-+	if(!env->mainBl.moves.ready){
-+		bestMove(env, &(env->mainBl.moves));
-+		env->mainBl.moves.ready=1;
++	if(!env->current_piece.moves.ready)
++	{
++		compute_best_move(env, &(env->current_piece.moves));
++		env->current_piece.moves.ready=1;
 +	}
 +
-+	if(env->mainBl.moves.r){
-+		move(env->stack, &(env->mainBl), ROT);
-+		env->mainBl.moves.r--;
++	if(env->current_piece.moves.r)
++	{
++		move(env->stack, &(env->current_piece), ROT);
++		env->current_piece.moves.r--;
 +	}
-+	else if(env->mainBl.moves.t>0){
-+		move(env->stack, &(env->mainBl), RIGHT);
-+		env->mainBl.moves.t--;
++	else if(env->current_piece.moves.t>0)
++	{
++		move(env->stack, &(env->current_piece), RIGHT);
++		env->current_piece.moves.t--;
 +	}
-+	else if(env->mainBl.moves.t<0){
-+		move(env->stack, &(env->mainBl), LEFT);
-+		env->mainBl.moves.t++;
++	else if(env->current_piece.moves.t<0)
++	{
++		move(env->stack, &(env->current_piece), LEFT);
++		env->current_piece.moves.t++;
 +	}
-+	else if(!move(env->stack, &(env->mainBl), DOWN)){
++	else if(!move(env->stack, &(env->current_piece), DOWN))
++	{
 +		
 +	}
-+	else if(env->mainBl.moves.t2>0){
-+		move(env->stack, &(env->mainBl), RIGHT);
-+		env->mainBl.moves.t2--;
++	else if(env->current_piece.moves.t2>0)
++	{
++		move(env->stack, &(env->current_piece), RIGHT);
++		env->current_piece.moves.t2--;
 +	}
-+	else if(env->mainBl.moves.t2<0){
-+		move(env->stack, &(env->mainBl), LEFT);
-+		env->mainBl.moves.t2++;
++	else if(env->current_piece.moves.t2<0)
++	{
++		move(env->stack, &(env->current_piece), LEFT);
++		env->current_piece.moves.t2++;
 +	}
-+	else{
-+		fix(env, &(env->mainBl), 0);
-+		ret = try(env->stack, &(env->mainBl));
++	else
++	{
++		fix_piece(env, &(env->current_piece), 0);
++		ret = check_collision(env->stack, &(env->current_piece));
 +	}
 +
 +	return ret;
 +}
 +
-+#ifdef STANDALONE_TETRIS
-+int main(int argc, char *argv[]){
-+
-+	glutInit(&argc, argv);
-+	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-+
-+	glutGameModeString("1024x600:32");
-+		/* enter full screen*/
-+/*	if (glutGameModeGet(GLUT_GAME_MODE_POSSIBLE))
-+		glutEnterGameMode();
-+	else {
-+*/		glutCreateWindow("GLUT Test");
-+/*	}
-+*/
-+	glutDisplayFunc(&display);
-+	glutIdleFunc(&display);
-+	glEnable(GL_DEPTH_TEST);
-+	glutReshapeFunc(changeSize);
-+	glutMainLoop();
-+
-+	return EXIT_SUCCESS;
-+
-+}
-+#endif
-+
-+static void square(int x, int y, int color){
-+	switch(color){
-+		case 0:
++static void draw_square(int x, int y, t_color color)
++{
++	switch(color)
++	{
++		case BLACK:
 +			glColor3f(0.0f, 0.0f, 0.0f);
 +			break;
-+		case 1:
++		case RED:
 +			glColor3f(1.0f, 0.0f, 0.0f);
 +			break;
-+		case 2:
++		case BLUE:
 +			glColor3f(1.0f, 1.0f, 0.0f);
 +			break;
-+		case 3:
++		case BROWN:
 +			glColor3f(1.0f, 0.0f, 1.0f);
 +			break;
-+		case 4:
++		case MAJ:
 +			glColor3f(1.0f, 1.0f, 1.0f);
 +			break;
-+		case 5:
++		case WHITE:
 +			glColor3f(0.0f, 1.0f, 0.0f);
 +			break;
-+		case 6:
++		case CYAN:
 +			glColor3f(0.0f, 0.0f, 1.0f);
 +			break;
-+		case 7:
++		case GREEN:
 +			glColor3f(0.0f, 1.0f, 1.0f);
 +			break;
 +	}
 +
-+	glBegin(GL_POLYGON);
 +	x-=5;
 +	y-=11;
-+	glVertex2f((x/22.0)-0.02f, -(y/22.0)+0.02f);
-+	glVertex2f((x/22.0)+0.02f, -(y/22.0)+0.02f);
-+	glVertex2f((x/22.0)+0.02f, -(y/22.0)-0.02f);
-+	glVertex2f((x/22.0)-0.02f, -(y/22.0)-0.02f);
++
++	glBegin(GL_QUADS);
++		glVertex2f((x)-SQUARE_SIZE, -(y)+SQUARE_SIZE);
++		glVertex2f((x)+SQUARE_SIZE, -(y)+SQUARE_SIZE);
++		glVertex2f((x)+SQUARE_SIZE, -(y)-SQUARE_SIZE);
++		glVertex2f((x)-SQUARE_SIZE, -(y)-SQUARE_SIZE);
 +	glEnd();
 +}
 +
-+#ifndef STANDALONE_TETRIS
-+static void renderBitmapString(ModeInfo *mi, char *string, int x, int y) {
-+#else
-+static void renderBitmapString(char *string) {
-+#endif
-+
-+#ifndef STANDALONE_TETRIS
-+	ENV *env = &tmpEnv[MI_SCREEN(mi)];
-+
-+	glColor3f(0.8, 0.8, 0);
-+		print_gl_string(mi->dpy, env->font, env->font_list,
-+			mi->xgwa.width, mi->xgwa.height,
-+			x, mi->xgwa.height - y, string, False);
-+#else
-+	char *c;
-+	glRasterPos3f((-6/22.0), -(12/22.0), 0.0);
-+	for (c=string; *c != '\0'; c++) {
-+		glutBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_10, *c);
++static void draw_segments(char *segments)
++{
++	while (*segments != '\0')
++	{
++		glBegin(GL_POLYGON);
++		switch (*segments)
++		{
++			case 'a':
++				glVertex2f(0.05f, 1.25f);
++				glVertex2f(0.10f, 1.30f);
++				glVertex2f(0.60f, 1.30f);
++				glVertex2f(0.64f, 1.25f);
++				glVertex2f(0.60f, 1.20f);
++				glVertex2f(0.10f, 1.20f);
++				break;
++			case 'b':
++				glVertex2f(0.65f, 1.25f);
++				glVertex2f(0.70f, 1.20f);
++				glVertex2f(0.70f, 0.70f);
++				glVertex2f(0.65f, 0.65f);
++				glVertex2f(0.60f, 0.70f);
++				glVertex2f(0.60f, 1.20f);
++				break;
++			case 'c':
++				glVertex2f(0.65f, 0.65f);
++				glVertex2f(0.70f, 0.60f);
++				glVertex2f(0.70f, 0.10f);
++				glVertex2f(0.65f, 0.05f);
++				glVertex2f(0.60f, 0.10f);
++				glVertex2f(0.60f, 0.60f);
++				break;
++			case 'd':
++				glVertex2f(0.05f, 0.05f);
++				glVertex2f(0.10f, 0.10f);
++				glVertex2f(0.60f, 0.10f);
++				glVertex2f(0.65f, 0.05f);
++				glVertex2f(0.60f, 0.00f);
++				glVertex2f(0.10f, 0.00f);
++				break;
++			case 'e':
++				glVertex2f(0.05f, 0.65f);
++				glVertex2f(0.10f, 0.60f);
++				glVertex2f(0.10f, 0.10f);
++				glVertex2f(0.05f, 0.05f);
++				glVertex2f(0.00f, 0.10f);
++				glVertex2f(0.00f, 0.60f);
++				break;
++			case 'f':
++				glVertex2f(0.05f, 1.25f);
++				glVertex2f(0.10f, 1.20f);
++				glVertex2f(0.10f, 0.70f);
++				glVertex2f(0.05f, 0.65f);
++				glVertex2f(0.00f, 0.70f);
++				glVertex2f(0.00f, 1.20f);
++				break;
++			case 'g':
++				glVertex2f(0.05f, 0.65f);
++				glVertex2f(0.10f, 0.70f);
++				glVertex2f(0.30f, 0.70f);
++				glVertex2f(0.35f, 0.65f);
++				glVertex2f(0.30f, 0.60f);
++				glVertex2f(0.10f, 0.60f);
++				break;
++			case 'h':
++				glVertex2f(0.35f, 0.65f);
++				glVertex2f(0.40f, 0.70f);
++				glVertex2f(0.60f, 0.70f);
++				glVertex2f(0.65f, 0.65f);
++				glVertex2f(0.60f, 0.60f);
++				glVertex2f(0.40f, 0.60f);
++				break;
++			case 'i':
++				glVertex2f(0.30f, 1.20f);
++				glVertex2f(0.40f, 1.20f);
++				glVertex2f(0.40f, 0.70f);
++				glVertex2f(0.35f, 0.65f);
++				glVertex2f(0.30f, 0.70f);
++				break;
++			case 'j':
++				glVertex2f(0.35f, 0.65f);
++				glVertex2f(0.40f, 0.60f);
++				glVertex2f(0.40f, 0.10f);
++				glVertex2f(0.30f, 0.10f);
++				glVertex2f(0.30f, 0.60f);
++				break;
++			case 'k':
++				glVertex2f(0.100f, 1.200f);
++				glVertex2f(0.175f, 1.200f);
++				glVertex2f(0.300f, 0.775f);
++				glVertex2f(0.300f, 0.700f);
++				glVertex2f(0.225f, 0.700f);
++				glVertex2f(0.100f, 1.125f);
++				break;
++			case 'l':
++				glVertex2f(0.525f, 1.200f);
++				glVertex2f(0.600f, 1.200f);
++				glVertex2f(0.600f, 1.125f);
++				glVertex2f(0.475f, 0.700f);
++				glVertex2f(0.400f, 0.700f);
++				glVertex2f(0.400f, 0.775f);
++				break;
++			case 'm':
++				glVertex2f(0.300f, 0.600f);
++				glVertex2f(0.225f, 0.600f);
++				glVertex2f(0.100f, 0.175f);
++				glVertex2f(0.100f, 0.100f);
++				glVertex2f(0.175f, 0.100f);
++				glVertex2f(0.300f, 0.525f);
++				break;
++			case 'n':
++				glVertex2f(0.400f, 0.600f);
++				glVertex2f(0.475f, 0.600f);
++				glVertex2f(0.600f, 0.175f);
++				glVertex2f(0.600f, 0.100f);
++				glVertex2f(0.525f, 0.100f);
++				glVertex2f(0.400f, 0.525f);
++				break;
++		}
++		glEnd();
++		segments++;
 +	}
-+#endif
 +}
 +
-+static void print_stack_gl(ENV *env){
++static void load_segments_font(void)
++{
++	int i=0;
++	glGenLists ((GLuint) 39);
++	while (number_segments[i] != NULL)
++	{
++		glNewList(i+'0'+MYLIST,GL_COMPILE);
++			draw_segments(number_segments[i++]);
++			glTranslatef (1.0f, 0.0f, 0.0f);
++		glEndList();
++	}
++
++	i=0;
++	while (char_segments[i] != NULL)
++	{
++		glNewList(i+'A'+MYLIST,GL_COMPILE);
++			draw_segments(char_segments[i++]);
++			glTranslatef(1.0f, 0.0f, 0.0f);
++		glEndList();
++	}
++
++	glNewList(' '+MYLIST,GL_COMPILE);
++		glTranslatef(1.0f, 0.0f, 0.0f);
++	glEndList();
++
++	glNewList(':'+MYLIST,GL_COMPILE);
++		glBegin(GL_POLYGON);
++			glVertex2f(0.15f, 0.90f);
++			glVertex2f(0.25f, 0.90f);
++			glVertex2f(0.25f, 1.00f);
++			glVertex2f(0.15f, 1.00f);
++		glEnd();
++		glBegin(GL_POLYGON);
++			glVertex2f(0.15f, 0.30f);
++			glVertex2f(0.25f, 0.30f);
++			glVertex2f(0.25f, 0.40f);
++			glVertex2f(0.15f, 0.40f);
++		glEnd();
++		glTranslatef (0.650f, 0.0f, 0.0f);
++	glEndList();
++}
++
++static void draw_string(float x, float y, char *fmt, ...)
++{
++	char buffer[64];
++	va_list args;
++	va_start(args, fmt);
++	
++	vsprintf(buffer, fmt, args);
++	va_end(args);
++	
++	glPushMatrix();
++		glTranslatef(x, y, 0.0f);
++		glListBase(MYLIST);
++		glCallLists(strlen(buffer), GL_UNSIGNED_BYTE, buffer);
++	glPopMatrix();
++}
++
++static void draw_stack(tetrisstruct *env)
++{
 +	int i, j;
-+	for(j=0; j<HEIGHT; j++){
-+		for(i=0; i<WIDTH; i++){
-+			if(env->stack[i][j]){
-+				square(i,j,env->stack[i][j]);
++
++	for(j=0; j<HEIGHT; j++)
++	{
++		for(i=0; i<WIDTH; i++)
++		{
++			if(env->stack[i][j])
++			{
++				draw_square(i,j,env->stack[i][j]);
 +			}
-+			else if(i>=env->mainBl.i && i<(env->mainBl.i+4) && j>=env->mainBl.j && j<(env->mainBl.j+4) ){
-+				if(env->mainBl.bl[i-env->mainBl.i][j-env->mainBl.j]){
-+					square(i,j,env->mainBl.bl[i-env->mainBl.i][j-env->mainBl.j]);
++			else if(i>=env->current_piece.i && i<(env->current_piece.i+4) && j>=env->current_piece.j && j<(env->current_piece.j+4) )
++			{
++				if(env->current_piece.blocks[i-env->current_piece.i][j-env->current_piece.j])
++				{
++					draw_square(i,j,env->current_piece.blocks[i-env->current_piece.i][j-env->current_piece.j]);
 +				}
 +			}
 +		}
 +	}
++	
++	for(i=0; i<4; i++)
++	{
++		for(j=0; j<4; j++)
++		{
++			if(env->next_piece.blocks[i][j])
++			{
++				draw_square(13+i, j, env->next_piece.blocks[i][j]);
++			}
++		}
++	}
++
 +}
 +
-+#include <math.h>
-+/*matrix will receive the calculated perspective matrix.
-+You would have to upload to your shader
-+ or use glLoadMatrixf if you aren't using shaders.*/
-+
-+static void mygluPerspective(GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar)
-+{
-+	GLdouble xmin, xmax, ymin, ymax;
-+
-+	ymax = zNear * tan(fovy * M_PI / 360.0);
-+	ymin = -ymax;
-+	xmin = ymin * aspect;
-+	xmax = ymax * aspect;
-+
-+	glFrustum(xmin, xmax, ymin, ymax, zNear, zFar);
-+}
-+
-+
-+#ifndef STANDALONE_TETRIS
 +ENTRYPOINT void reshape_tetris (ModeInfo *mi, int w, int h){
-+#else
-+static void changeSize(int w, int h) {
-+#endif
 +	float ratio;
 +
 +	/* Prevent a divide by zero, when window is too short
@@ -669,225 +888,197 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/
 +	glViewport(0, 0, w, h);
 +
 +	/* Set the correct perspective.*/
-+	gluPerspective(45.0,ratio,1.0,1000.0);
-+	/*mygluPerspective(45,ratio,1,1000);*/
++	gluPerspective(45.0f,ratio,-100.0f,2.0f);
 +	glMatrixMode(GL_MODELVIEW);
 +	glLoadIdentity();
-+/*	gluLookAt(	0.0,0.0,1.5,
-+				0.0,0.0,-1.0,
-+				0.0f,1.0f,0.0f);*/
-+/*	glMultMatrixf(M);*/
-+	glTranslated(0.0, 0.0, -1.5);
-+
-+
++	glTranslated(0.0f, 0.0f, -32.0f);
 +}
 +
-+#ifndef STANDALONE_TETRIS
-+ENTRYPOINT void *init_tetris(ModeInfo *mi){
-+#else
-+static ENV *init_tetris(){
-+#endif
-+	ENV *env;
++ENTRYPOINT void init_tetris(ModeInfo *mi)
++{
++	tetrisstruct *env;
 +
-+#ifdef STANDALONE_TETRIS
-+	srand(time(NULL));
-+#endif
-+#ifndef STANDALONE_TETRIS
-+	if (!tmpEnv) {
-+		tmpEnv=calloc (MI_NUM_SCREENS(mi), sizeof(ENV));
++	if (!tetris)
++	{
++		tetris=calloc (MI_NUM_SCREENS(mi), sizeof(tetrisstruct));
 +	}
-+	env = &tmpEnv[MI_SCREEN(mi)];
++	env = &tetris[MI_SCREEN(mi)];
 +	env->glx_context = init_GL(mi);
 +	reshape_tetris(mi, MI_WIDTH(mi), MI_HEIGHT(mi));
-+	load_font(mi->dpy, "titleFont", &env->font, &env->font_list);
++	
 +	glEnable(GL_DEPTH_TEST);
-+#else
-+	env=(ENV *)malloc(sizeof(ENV));
-+#endif
++	
++	load_segments_font();
++
 +	env->end=-1;
 +	env->newPhase=0;
 +	env->game_time=time(NULL);
 +	
 +	memset(env->stack, 0, WIDTH*HEIGHT*sizeof(int));
-+	memset(env->tmpStack, 0, WIDTH*HEIGHT*sizeof(int));
-+	return env;
++	memset(env->tmp_stack, 0, WIDTH*HEIGHT*sizeof(int));
 +}
 +
-+#ifndef STANDALONE_TETRIS
-+static void free_tetris(Display *dpy, Window window, void *closure){
-+#else
-+static void tetris_free(ENV *env){
-+#endif
-+
-+#ifndef STANDALONE_TETRIS
-+	ENV *env=(ENV *)closure;
-+#endif
-+
-+	free(env);
++ENTRYPOINT void release_tetris(ModeInfo * mi) 
++{
++	if (tetris)
++	{
++		free((void *) tetris);
++		tetris = (tetrisstruct *) NULL;
++	}
++	FreeAllGL(mi);
 +}
 +
-+#ifndef STANDALONE_TETRIS
-+ENTRYPOINT void draw_tetris (ModeInfo *mi){
-+#else
-+static void display(){
-+#endif
++ENTRYPOINT void draw_tetris(ModeInfo *mi)
++{
 +	int i,j;
-+	char str[255];
-+	time_t curtime;
++	unsigned int curtime;
 +
-+#ifndef STANDALONE_TETRIS
 +	Display *dpy = MI_DISPLAY(mi);
 +	Window window = MI_WINDOW(mi);
 +	
-+	glXMakeCurrent(MI_DISPLAY(mi), MI_WINDOW(mi), *(tmpEnv->glx_context));
-+#else
-+	if(!tmpEnv){
-+		tmpEnv=init_tetris();
++	glXMakeCurrent(MI_DISPLAY(mi), MI_WINDOW(mi), *(tetris->glx_context));
++	if (!tetris->end)
++	{
++		tetris->end=next(tetris);
 +	}
-+#endif
-+	if(!tmpEnv->end){
-+		tmpEnv->end=next(tmpEnv);
-+	}
-+	else{
-+		tmpEnv->newPhase++;
++	else
++	{
++		tetris->newPhase++;
 +	}
 +	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
++	glDisable(GL_DEPTH_TEST);
 +	glPushMatrix();
 +	glColor3f(0.5f, 0.5f, 0.5f);
 +
++
 +	glBegin(GL_POLYGON);
-+	glVertex2f(( -6/22.0)-0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( -6/22.0)+0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( -6/22.0)+0.02f, -( 11/22.0)-0.02f);
-+	glVertex2f(( -6/22.0)-0.02f, -( 11/22.0)-0.02f);
++		glVertex2f(( -6.0)-SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( -6.0)+SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( -6.0)+SQUARE_SIZE, -( 11.0)-SQUARE_SIZE);
++		glVertex2f(( -6.0)-SQUARE_SIZE, -( 11.0)-SQUARE_SIZE);
 +	glEnd();
 +	glBegin(GL_POLYGON);
-+	glVertex2f(( 5/22.0)-0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 5/22.0)+0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 5/22.0)+0.02f, -( 11/22.0)-0.02f);
-+	glVertex2f(( 5/22.0)-0.02f, -( 11/22.0)-0.02f);
++		glVertex2f(( 5.0)-SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 5.0)+SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 5.0)+SQUARE_SIZE, -( 11.0)-SQUARE_SIZE);
++		glVertex2f(( 5.0)-SQUARE_SIZE, -( 11.0)-SQUARE_SIZE);
 +	glEnd();
 +	glBegin(GL_POLYGON);
-+	glVertex2f(( -6/22.0)-0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f((  5/22.0)+0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f((  5/22.0)+0.02f, -( -12/22.0)-0.02f);
-+	glVertex2f(( -6/22.0)-0.02f, -( -12/22.0)-0.02f);
++		glVertex2f(( -6.0)-SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f((  5.0)+SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f((  5.0)+SQUARE_SIZE, -( -12.0)-SQUARE_SIZE);
++		glVertex2f(( -6.0)-SQUARE_SIZE, -( -12.0)-SQUARE_SIZE);
 +	glEnd();
 +	glBegin(GL_POLYGON);
-+	glVertex2f((  5/22.0)-0.02f, -( 11/22.0)+0.02f);
-+	glVertex2f(( -6/22.0)+0.02f, -( 11/22.0)+0.02f);
-+	glVertex2f(( -6/22.0)+0.02f, -( 11/22.0)-0.02f);
-+	glVertex2f((  5/22.0)-0.02f, -( 11/22.0)-0.02f);
++		glVertex2f((  5.0)-SQUARE_SIZE, -( 11.0)+SQUARE_SIZE);
++		glVertex2f(( -6.0)+SQUARE_SIZE, -( 11.0)+SQUARE_SIZE);
++		glVertex2f(( -6.0)+SQUARE_SIZE, -( 11.0)-SQUARE_SIZE);
++		glVertex2f((  5.0)-SQUARE_SIZE, -( 11.0)-SQUARE_SIZE);
 +	glEnd();
++
++	glBegin(GL_POLYGON);
++		glVertex2f(( 7.0)-SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 7.0)+SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 7.0)+SQUARE_SIZE, -(  -7.0)-SQUARE_SIZE);
++		glVertex2f(( 7.0)-SQUARE_SIZE, -(  -7.0)-SQUARE_SIZE);
++	glEnd();
++	glBegin(GL_POLYGON);
++		glVertex2f(( 12.0)-SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 12.0)+SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 12.0)+SQUARE_SIZE, -(  -7.0)-SQUARE_SIZE);
++		glVertex2f(( 12.0)-SQUARE_SIZE, -(  -7.0)-SQUARE_SIZE);
++	glEnd();
++	glBegin(GL_POLYGON);
++		glVertex2f((  7.0)-SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 12.0)+SQUARE_SIZE, -( -12.0)+SQUARE_SIZE);
++		glVertex2f(( 12.0)+SQUARE_SIZE, -( -12.0)-SQUARE_SIZE);
++		glVertex2f((  7.0)-SQUARE_SIZE, -( -12.0)-SQUARE_SIZE);
++	glEnd();
++	glBegin(GL_POLYGON);
++		glVertex2f(( 12.0)-SQUARE_SIZE, -( -7.0)+SQUARE_SIZE);
++		glVertex2f((  7.0)+SQUARE_SIZE, -( -7.0)+SQUARE_SIZE);
++		glVertex2f((  7.0)+SQUARE_SIZE, -( -7.0)-SQUARE_SIZE);
++		glVertex2f(( 12.0)-SQUARE_SIZE, -( -7.0)-SQUARE_SIZE);
++	glEnd();
++
++	if (tetris->newPhase)
++	{
++		if (tetris->newPhase > 44)
++		{
++			tetris->score=0;
++			tetris->totline=0;
++			tetris->newPhase=0;
++			tetris->end=0;
++			tetris->game_time=time(NULL);
++			memset(tetris->stack, 0, sizeof(tetris->stack));
++			new_piece(&(tetris->current_piece));
++			new_piece(&(tetris->next_piece));
++		}
++		else if (tetris->newPhase>HEIGHT)
++		{
++			for (j=0; j < (tetris->newPhase-HEIGHT); j++)
++			{
++				for (i=0; i<WIDTH; i++)
++				{
++					draw_square(i, j, 0);
++				}
++			}
++			for (; j<HEIGHT; j++)
++			{
++				for (i=0; i<WIDTH; i++)
++				{
++					draw_square(i, j, 1);
++				}
++			}
++		}
++		else
++		{
++			for (j=HEIGHT-1; j >= (HEIGHT-tetris->newPhase); j--)
++			{
++				for (i=0; i < WIDTH; i++)
++				{
++					draw_square(i, j, 1);
++				}
++			}
++		}
++	}
++	draw_stack(tetris);
++
++	curtime = time(NULL) - tetris->game_time;
 +	
-+	glBegin(GL_POLYGON);
-+	glVertex2f(( 7/22.0)-0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 7/22.0)+0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 7/22.0)+0.02f, -(  -7/22.0)-0.02f);
-+	glVertex2f(( 7/22.0)-0.02f, -(  -7/22.0)-0.02f);
-+	glEnd();
-+	glBegin(GL_POLYGON);
-+	glVertex2f(( 12/22.0)-0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 12/22.0)+0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 12/22.0)+0.02f, -(  -7/22.0)-0.02f);
-+	glVertex2f(( 12/22.0)-0.02f, -(  -7/22.0)-0.02f);
-+	glEnd();
-+	glBegin(GL_POLYGON);
-+	glVertex2f((  7/22.0)-0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 12/22.0)+0.02f, -( -12/22.0)+0.02f);
-+	glVertex2f(( 12/22.0)+0.02f, -( -12/22.0)-0.02f);
-+	glVertex2f((  7/22.0)-0.02f, -( -12/22.0)-0.02f);
-+	glEnd();
-+	glBegin(GL_POLYGON);
-+	glVertex2f(( 12/22.0)-0.02f, -( -7/22.0)+0.02f);
-+	glVertex2f((  7/22.0)+0.02f, -( -7/22.0)+0.02f);
-+	glVertex2f((  7/22.0)+0.02f, -( -7/22.0)-0.02f);
-+	glVertex2f(( 12/22.0)-0.02f, -( -7/22.0)-0.02f);
-+	glEnd();
-+
-+	for(i=0; i<4; i++){
-+		for(j=0; j<4; j++){
-+			if(tmpEnv->nextBl.bl[i][j]){
-+				square(13+i, j, tmpEnv->nextBl.bl[i][j]);
-+			}
-+		}
-+	}
-+
-+	if(tmpEnv->newPhase){
-+		if(tmpEnv->newPhase>44){
-+			tmpEnv->score=0;
-+			tmpEnv->totline=0;
-+			tmpEnv->newPhase=0;
-+			tmpEnv->end=0;
-+			tmpEnv->game_time=time(NULL);
-+			memset(tmpEnv->stack, 0, sizeof(tmpEnv->stack));
-+			newBlock(&(tmpEnv->mainBl));
-+			newBlock(&(tmpEnv->nextBl));
-+			print_stack_gl(tmpEnv);
-+		}
-+		else if(tmpEnv->newPhase>HEIGHT){
-+			for(j=0; j<(tmpEnv->newPhase-HEIGHT); j++){
-+				for(i=0; i<WIDTH; i++){
-+					square(i, j, 0);
-+				}
-+			}
-+			for(; j<HEIGHT; j++){
-+				for(i=0; i<WIDTH; i++){
-+					square(i, j, 1);
-+				}
-+			}
-+		}
-+		else{
-+			for(j=HEIGHT-1; j>=(HEIGHT-tmpEnv->newPhase); j--){
-+				for(i=0; i<WIDTH; i++){
-+					square(i, j, 1);
-+				}
-+			}
-+		}
-+	}
-+	print_stack_gl(tmpEnv);
-+	sprintf(str, "score=%d, line=%d", tmpEnv->score, tmpEnv->totline);
 +	glColor3f(0.5f, 0.5f, 0.5f);
-+#ifdef STANDALONE_TETRIS
-+	renderBitmapString(str);
-+#else
-+	renderBitmapString(mi, str, 10, 10);
-+#endif
++	draw_string(7.0f, 4.0f, "SCORE");
++	glColor3f(0.0f, 1.0f, 0.0f);
++	draw_string(7.3f, 2.0f, "% 7d", tetris->score);
 +
-+	curtime = time(NULL) - tmpEnv->game_time;
-+
-+	sprintf(str, "Time : %.2dh%.2dm%.2d", curtime/3600, (curtime%3600)/60, curtime%60);
 +	glColor3f(0.5f, 0.5f, 0.5f);
-+#ifdef STANDALONE_TETRIS
-+	renderBitmapString(str);
-+#else
-+	renderBitmapString(mi, str, 10, 250);
-+#endif
++	draw_string(7.0f, -2.0f, "LINES");
++	glColor3f(0.0f, 1.0f, 0.0f);
++	draw_string(7.3f, -4.0f, "% 7d", tetris->totline);
++
++	glColor3f(0.5f, 0.5f, 0.5f);
++	draw_string(7.0f, -8.0f, "TIME");
++	glColor3f(0.0f, 1.0f, 0.0f);
++	draw_string(7.0f, -10.0f, "%.2u:%.2u:%.2u", curtime/3600, (curtime%3600)/60, curtime%60);
 +
 +	glPopMatrix();
 +
 +	if (MI_IS_FPS(mi)) do_fps (mi);
 +
-+#ifdef STANDALONE_TETRIS
-+	glutSwapBuffers();
-+#else
 +	glXSwapBuffers(dpy, window);
-+#endif
 +}
 +
-+#ifndef STANDALONE_TETRIS
-+ENTRYPOINT Bool
-+tetris_handle_event (ModeInfo *mi, XEvent *event){
++ENTRYPOINT Bool tetris_handle_event (ModeInfo *mi, XEvent *event)
++{
 +	return False;
 +}
 +
-+XSCREENSAVER_MODULE_2 ("Tetris", tetris, tetris)
-+#endif
++XSCREENSAVER_MODULE ("Tetris", tetris)
 diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.h xscreensaver-5.26/hacks/glx/tetris.h
 --- xscreensaver-5.26.orig/hacks/glx/tetris.h	1970-01-01 01:00:00.000000000 +0100
 +++ xscreensaver-5.26/hacks/glx/tetris.h	2013-10-14 22:03:13.000000000 +0200
-@@ -0,0 +1,111 @@
-+/* tetris, Copyright (c) 2013 Vivien HENRIET <henriet@bubuabu.org>
+@@ -0,0 +1,164 @@
++/* tetris, Copyright (c) 2013 Vivien HENRIET <bubuabu@bubuabu.org>
 + *
 + * Permission to use, copy, modify, distribute, and sell this software and its
 + * documentation for any purpose is hereby granted without fee, provided that
@@ -899,102 +1090,212 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.h xscreensaver-5.26/hacks/glx/
 + */
 +
 +#include "time.h"
-+#define RIGHT	1
-+#define LEFT	2
-+#define DOWN	3
-+#define ROT		4
++
++typedef enum {RIGHT, LEFT, DOWN, ROT} t_direction;
++typedef enum {BLACK, RED, BLUE, BROWN, MAJ, WHITE, CYAN, GREEN} t_color;
 +
 +#define HEIGHT	22
 +#define WIDTH	10
 +
++#define SQUARE_SIZE	0.45f
 +
-+int lbl[7][4][4] = {
-+{	/*RED I - 1*/
-+	{0,0,1,0},
-+	{0,0,1,0},
-+	{0,0,1,0},
-+	{0,0,1,0}
-+},
-+{	/*BLUE O - 2*/
-+	{0,0,0,0},
-+	{0,6,6,0},
-+	{0,6,6,0},
-+	{0,0,0,0}
-+},
-+{	/*BROWN T - 3*/
-+	{0,2,0,0},
-+	{0,2,2,0},
-+	{0,2,0,0},
-+	{0,0,0,0}
-+},
-+{	/*MAJ L - 4*/
-+	{0,3,0,0},
-+	{0,3,0,0},
-+	{0,3,3,0},
-+	{0,0,0,0}
-+},
-+{	/*WHITE J - 5*/
-+	{0,0,4,0},
-+	{0,0,4,0},
-+	{0,4,4,0},
-+	{0,0,0,0}
-+},
-+{	/*CYAN Z - 6*/
-+	{0,7,7,0},
-+	{0,0,7,7},
-+	{0,0,0,0},
-+	{0,0,0,0}
-+},
-+{	/*GREEN S - 7*/
-+	{0,0,5,5},
-+	{0,5,5,0},
-+	{0,0,0,0},
-+	{0,0,0,0}
-+}
++#define MYLIST	5000
++
++static char *number_segments[] =
++{
++	"abcdef",	/*0*/
++	"bc",		/*1*/
++	"abdegh",	/*2*/
++	"abcdgh",	/*3*/
++	"bcfgh",	/*4*/
++	"acdfgh",	/*5*/
++	"acdefgh",	/*6*/
++	"abc",		/*7*/
++	"abcdefgh",	/*8*/
++	"abcdfgh",	/*9*/
++	NULL
 +};
-+typedef struct aMove {
++
++static char *char_segments[] =
++{
++	"abcefgh",	/*A*/
++	"cdefgh",	/*B*/
++	"adef",		/*C*/
++	"bcdegh",	/*D*/
++	"adefgh",	/*E*/
++	"aefg",		/*F*/
++	"acdefh",	/*G*/
++	"bcefgh",	/*H*/
++	"ij",		/*I*/
++	"bcde",		/*J*/
++	"efgln",	/*K*/
++	"def",		/*L*/
++	"bcefkl",	/*M*/
++	"bcefkn",	/*N*/
++	"abcdef",	/*O*/
++	"abefgh",	/*P*/
++	"abcdefn",	/*Q*/
++	"abefghn",	/*R*/
++	"acdfgh",	/*S*/
++	"aij",		/*T*/
++	"bcdef",	/*U*/
++	"eflm",		/*V*/
++	"bcefmn",	/*W*/
++	"klmn",		/*X*/
++	"jkl",		/*Y*/
++	"adlm",		/*Z*/
++	NULL
++};
++
++static int lbl[7][4][4] =
++{
++	{	/*RED I - 1*/
++		{0,0,1,0},
++		{0,0,1,0},
++		{0,0,1,0},
++		{0,0,1,0}
++	},
++	{	/*BLUE O - 2*/
++		{0,0,0,0},
++		{0,6,6,0},
++		{0,6,6,0},
++		{0,0,0,0}
++	},
++	{	/*BROWN T - 3*/
++		{0,2,0,0},
++		{0,2,2,0},
++		{0,2,0,0},
++		{0,0,0,0}
++	},
++	{	/*MAJ L - 4*/
++		{0,3,0,0},
++		{0,3,0,0},
++		{0,3,3,0},
++		{0,0,0,0}
++	},
++	{	/*WHITE J - 5*/
++		{0,0,4,0},
++		{0,0,4,0},
++		{0,4,4,0},
++		{0,0,0,0}
++	},
++	{	/*CYAN Z - 6*/
++		{0,7,7,0},
++		{0,0,7,7},
++		{0,0,0,0},
++		{0,0,0,0}
++	},
++	{	/*GREEN S - 7*/
++		{0,0,5,5},
++		{0,5,5,0},
++		{0,0,0,0},
++		{0,0,0,0}
++	}
++};
++
++typedef struct
++{
 +	int r;
 +	int t;
 +	int ready;
 +	int r2;
 +	int t2;
-+	int d;
-+} MOVE;
++} t_move;
 +
-+typedef struct block {
-+	int bl[4][4];
++typedef struct
++{
++	int blocks[4][4];
 +	int i;
 +	int j;
-+	MOVE moves;
-+} BLOCK;
++	t_move moves;
++} t_piece;
 +
-+typedef struct env {
++typedef struct
++{
 +	int score;
 +	int totline;
-+	BLOCK mainBl;
-+	BLOCK nextBl;
++	t_piece current_piece;
++	t_piece next_piece;
 +	int end;
 +	int newPhase;
 +	int stack[WIDTH][HEIGHT];
-+	int tmpStack[WIDTH][HEIGHT];
++	int tmp_stack[WIDTH][HEIGHT];
 +	time_t game_time;
 +	GLXContext *glx_context;
-+	XFontStruct *font;
-+	GLuint font_list;
-+} ENV;
++} tetrisstruct;
 +
-+static void bestMove(ENV *env, MOVE *theBestMove);
-+static int holesShadowed(int stack[WIDTH][HEIGHT]);
-+static int calcScore(ENV *env, BLOCK *bl);
-+static int try(int stack[WIDTH][HEIGHT], BLOCK *bl);
-+static void newBlock(BLOCK *bl);
-+static int fix(ENV *env, BLOCK *bl, int tmp);
-+static int move(int stack[WIDTH][HEIGHT], BLOCK *bl, int dir);
-+static int next(ENV *env);
-+static void square(int x, int y, int color);
-+#ifndef STANDALONE_TETRIS
-+static void renderBitmapString(ModeInfo *mi, char *string, int x, int y);
-+#else
-+static void renderBitmapString(char *string);
-+#endif
-+static void print_stack_gl(ENV *env);
++static int count_holes_shadowed(int stack[WIDTH][HEIGHT]);
++static int count_stack_height(int stack[WIDTH][HEIGHT], t_piece *piece);
++static int count_well_depth(int stack[WIDTH][HEIGHT]);
++static int count_line_transition(int stack[WIDTH][HEIGHT]);
++static int count_row_transition(int stack[WIDTH][HEIGHT]);
++static int compute_score(tetrisstruct *env, t_piece *piece);
++static void compute_best_move(tetrisstruct *env, t_move *best_move);
++static int check_collision(int stack[WIDTH][HEIGHT], t_piece *piece);
++static void copy_piece(t_piece *dest, t_piece *src);
++static void new_piece(t_piece *piece);
++static int fix_piece(tetrisstruct *env, t_piece *piece, int tmp);
++static int move(int stack[WIDTH][HEIGHT], t_piece *piece, t_direction direction);
++static int next(tetrisstruct *env);
++static void draw_square(int x, int y, t_color color);
++static void draw_segments(char *segments);
++static void load_segments_font(void);
++static void draw_string(float x, float y, char *fmt, ...);
++static void draw_stack(tetrisstruct *env);
+diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.man xscreensaver-5.26/hacks/glx/tetris.man
+--- xscreensaver-5.26.orig/hacks/glx/tetris.man	1970-01-01 01:00:00.000000000 +0100
++++ xscreensaver-5.26/hacks/glx/tetris.man	2013-10-20 16:40:06.000000000 +0200
+@@ -0,0 +1,53 @@
++.TH XScreenSaver 1 "October 2013"
++.SH NAME
++tetris \- tetris screensaver
++.SH SYNOPSIS
++.B tetris
++[\-display \fIhost:display.screen\fP] [\-window] [\-root] [\-install]
++[\-visual \fIvisual\fP] [\-delay \fImicroseconds\fP] [\-fps]
++.SH DESCRIPTION
++\fItetris\fP screensaver.
++.SH OPTIONS
++.I tetris
++accepts the following options:
++.TP 8
++.B \-window
++Draw on a newly-created window.  This is the default.
++.TP 8
++.B \-root
++Draw on the root window.
++.TP 8
++.B \-install
++Install a private colormap for the window.
++.TP 8
++.B \-visual \fIvisual\fP\fP
++Specify which visual to use.  Legal values are the name of a visual class,
++or the id number (decimal or hex) of a specific visual.
++.TP 8
++.B \-fps
++Display the current frame rate, CPU load, and polygon count.
++.SH ENVIRONMENT
++.PP
++.TP 8
++.B DISPLAY
++to get the default host and display number.
++.TP 8
++.B XENVIRONMENT
++to get the name of a resource file that overrides the global resources
++stored in the RESOURCE_MANAGER property.
++.SH SEE ALSO
++.BR X (1),
++.BR xscreensaver (1)
++.BR xscreensaver\-demo (1),
++.BR xscreensaver\-getimage (1)
++.SH COPYRIGHT
++Copyright \(co 2013 by Vivien HENRIET.  Permission to use, copy, modify,
++distribute, and sell this software and its documentation for any purpose is
++hereby granted without fee, provided that the above copyright notice appear
++in all copies and that both that copyright notice and this permission notice
++appear in supporting documentation.  No representations are made about the
++suitability of this software for any purpose.  It is provided "as is" without
++express or implied warranty.
++.SH AUTHOR
++Vivien HENRIET <bubuabu@bubuabu.org>, 1-October-2013.
++ 

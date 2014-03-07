@@ -1,6 +1,6 @@
-diff -uprN xscreensaver-5.22/hacks/config/tetris.xml xscreensaver-5.22.tetris/hacks/config/tetris.xml
---- xscreensaver-5.22/hacks/config/tetris.xml	1970-01-01 01:00:00.000000000 +0100
-+++ xscreensaver-5.22.tetris/hacks/config/tetris.xml	2013-10-14 21:52:38.000000000 +0200
+diff -ruN xscreensaver-5.26.orig/hacks/config/tetris.xml xscreensaver-5.26/hacks/config/tetris.xml
+--- xscreensaver-5.26.orig/hacks/config/tetris.xml	1970-01-01 01:00:00.000000000 +0100
++++ xscreensaver-5.26/hacks/config/tetris.xml	2013-10-14 21:52:38.000000000 +0200
 @@ -0,0 +1,19 @@
 +<?xml version="1.0" encoding="ISO-8859-1"?>
 +
@@ -21,51 +21,53 @@ diff -uprN xscreensaver-5.22/hacks/config/tetris.xml xscreensaver-5.22.tetris/ha
 +Written by Vivien HENRIET; 2013.
 +  </_description>
 +</screensaver>
-diff -uprN xscreensaver-5.22/hacks/glx/Makefile.in xscreensaver-5.22.tetris/hacks/glx/Makefile.in
---- xscreensaver-5.22/hacks/glx/Makefile.in	2013-07-16 11:23:33.000000000 +0200
-+++ xscreensaver-5.22.tetris/hacks/glx/Makefile.in	2013-10-20 16:44:01.000000000 +0200
-@@ -117,7 +117,7 @@ SRCS		= xscreensaver-gl-helper.c normals
+diff -ruN xscreensaver-5.26.orig/hacks/glx/Makefile.in xscreensaver-5.26/hacks/glx/Makefile.in
+--- xscreensaver-5.26.orig/hacks/glx/Makefile.in	2013-07-16 11:23:33.000000000 +0200
++++ xscreensaver-5.26/hacks/glx/Makefile.in	2013-10-11 14:49:14.000000000 +0200
+@@ -117,7 +117,7 @@
  		  hilbert.c companion.c companion_quad.c companion_disc.c \
  		  companion_heart.c tronbit.c tronbit_idle1.c tronbit_idle2.c \
  		  tronbit_no.c tronbit_yes.c jwzgles.c kaleidocycle.c \
--		  quasicrystal.c unknownpleasures.c
-+		  quasicrystal.c unknownpleasures.c tetris.c
+-		  quasicrystal.c unknownpleasures.c geodesic.c
++		  quasicrystal.c unknownpleasures.c geodesic.c tetris.c
  
  OBJS		= xscreensaver-gl-helper.o normals.o glxfonts.o fps-gl.o \
  		  atlantis.o b_draw.o b_lockglue.o b_sphere.o bubble3d.o \
-@@ -157,7 +157,7 @@ OBJS		= xscreensaver-gl-helper.o normals
+@@ -157,7 +157,7 @@
  		  hilbert.o companion.o companion_quad.o companion_disc.o \
  		  companion_heart.o tronbit.o tronbit_idle1.o tronbit_idle2.o \
  		  tronbit_no.o tronbit_yes.o jwzgles.o kaleidocycle.o \
--		  quasicrystal.o unknownpleasures.o
-+		  quasicrystal.o unknownpleasures.o tetris.o
+-		  quasicrystal.o unknownpleasures.o geodesic.o
++		  quasicrystal.o unknownpleasures.o geodesic.o tetris.o
  
  GL_EXES		= cage gears moebius pipes sproingies stairs superquadrics \
  		  morph3d rubik atlantis lament bubble3d glplanet pulsar \
-@@ -173,7 +173,7 @@ GL_EXES		= cage gears moebius pipes spro
+@@ -173,7 +173,7 @@
  		  juggler3d topblock glschool glcells voronoi moebiusgears \
  		  lockward cubicgrid hypnowheel skytentacles jigsaw photopile \
  		  rubikblocks surfaces hilbert companioncube tronbit \
--		  kaleidocycle quasicrystal unknownpleasures
-+		  kaleidocycle quasicrystal unknownpleasures tetris
+-		  kaleidocycle quasicrystal unknownpleasures geodesic
++		  kaleidocycle quasicrystal unknownpleasures geodesic tetris
  GLE_EXES	= extrusion
  SUID_EXES	= sonar
  GL_UTIL_EXES	= xscreensaver-gl-helper
-@@ -831,6 +831,9 @@ quasicrystal:	quasicrystal.o	$(HACK_TRAC
- unknownpleasures: unknownpleasures.o	$(HACK_TRACK_OBJS)
- 	$(CC_HACK) -o $@ $@.o	$(HACK_TRACK_OBJS) $(HACK_LIBS)
+@@ -834,6 +834,10 @@
+ geodesic: geodesic.o		 normals.o $(HACK_TRACK_OBJS)
+ 	$(CC_HACK) -o $@ $@.o	 normals.o $(HACK_TRACK_OBJS) $(HACK_LIBS)
  
 +tetris:	tetris.o	$(DB_OBJS)
 +	$(CC_HACK) -o $@ $@.o	$(DB_OBJS) $(HACK_LIBS)
 +
- 
++
+
+
  ##############################################################################
  #
-diff -uprN xscreensaver-5.22/hacks/glx/tetris.c xscreensaver-5.22.tetris/hacks/glx/tetris.c
---- xscreensaver-5.22/hacks/glx/tetris.c	1970-01-01 01:00:00.000000000 +0100
-+++ xscreensaver-5.22.tetris/hacks/glx/tetris.c	2013-10-20 16:53:24.000000000 +0200
+diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/tetris.c
+--- xscreensaver-5.26.orig/hacks/glx/tetris.c	1970-01-01 01:00:00.000000000 +0100
++++ xscreensaver-5.26/hacks/glx/tetris.c	2013-10-14 22:39:23.000000000 +0200
 @@ -0,0 +1,1007 @@
-+/* tetris, Copyright (c) 2013 Vivien HENRIET <bubuabu@bubuabu.org>
++/* tetris, Copyright (c) 2013 Vivien HENRIET <henriet@bubuabu.org>
 + *
 + * Permission to use, copy, modify, distribute, and sell this software and its
 + * documentation for any purpose is hereby granted without fee, provided that
@@ -1072,9 +1074,9 @@ diff -uprN xscreensaver-5.22/hacks/glx/tetris.c xscreensaver-5.22.tetris/hacks/g
 +}
 +
 +XSCREENSAVER_MODULE ("Tetris", tetris)
-diff -uprN xscreensaver-5.22/hacks/glx/tetris.h xscreensaver-5.22.tetris/hacks/glx/tetris.h
---- xscreensaver-5.22/hacks/glx/tetris.h	1970-01-01 01:00:00.000000000 +0100
-+++ xscreensaver-5.22.tetris/hacks/glx/tetris.h	2013-10-20 16:53:30.000000000 +0200
+diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.h xscreensaver-5.26/hacks/glx/tetris.h
+--- xscreensaver-5.26.orig/hacks/glx/tetris.h	1970-01-01 01:00:00.000000000 +0100
++++ xscreensaver-5.26/hacks/glx/tetris.h	2013-10-14 22:03:13.000000000 +0200
 @@ -0,0 +1,164 @@
 +/* tetris, Copyright (c) 2013 Vivien HENRIET <bubuabu@bubuabu.org>
 + *
@@ -1240,9 +1242,9 @@ diff -uprN xscreensaver-5.22/hacks/glx/tetris.h xscreensaver-5.22.tetris/hacks/g
 +static void load_segments_font(void);
 +static void draw_string(float x, float y, char *fmt, ...);
 +static void draw_stack(tetrisstruct *env);
-diff -uprN xscreensaver-5.22/hacks/glx/tetris.man xscreensaver-5.22.tetris/hacks/glx/tetris.man
---- xscreensaver-5.22/hacks/glx/tetris.man	1970-01-01 01:00:00.000000000 +0100
-+++ xscreensaver-5.22.tetris/hacks/glx/tetris.man	2013-10-20 16:40:06.000000000 +0200
+diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.man xscreensaver-5.26/hacks/glx/tetris.man
+--- xscreensaver-5.26.orig/hacks/glx/tetris.man	1970-01-01 01:00:00.000000000 +0100
++++ xscreensaver-5.26/hacks/glx/tetris.man	2013-10-20 16:40:06.000000000 +0200
 @@ -0,0 +1,53 @@
 +.TH XScreenSaver 1 "October 2013"
 +.SH NAME

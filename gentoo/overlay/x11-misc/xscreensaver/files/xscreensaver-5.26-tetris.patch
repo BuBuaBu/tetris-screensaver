@@ -66,7 +66,7 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/Makefile.in xscreensaver-5.26/hacks/g
 diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.c xscreensaver-5.26/hacks/glx/tetris.c
 --- xscreensaver-5.26.orig/hacks/glx/tetris.c	1970-01-01 01:00:00.000000000 +0100
 +++ xscreensaver-5.26/hacks/glx/tetris.c	2013-10-14 22:39:23.000000000 +0200
-@@ -0,0 +1,816 @@
+@@ -0,0 +1,1007 @@
 +/* tetris, Copyright (c) 2013 Vivien HENRIET <henriet@bubuabu.org>
 + *
 + * Permission to use, copy, modify, distribute, and sell this software and its

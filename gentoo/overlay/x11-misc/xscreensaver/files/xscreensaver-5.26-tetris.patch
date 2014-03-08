@@ -51,14 +51,26 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/Makefile.in xscreensaver-5.26/hacks/g
  GLE_EXES	= extrusion
  SUID_EXES	= sonar
  GL_UTIL_EXES	= xscreensaver-gl-helper
-@@ -834,6 +834,10 @@
- geodesic: geodesic.o		 normals.o $(HACK_TRACK_OBJS)
- 	$(CC_HACK) -o $@ $@.o	 normals.o $(HACK_TRACK_OBJS) $(HACK_LIBS)
+@@ -229,7 +229,7 @@
+ 		  hypnowheel.man skytentacles.man sonar.man jigsaw.man \
+ 		  photopile.man rubikblocks.man surfaces.man hilbert.man \
+ 		  companioncube.man tronbit.man kaleidocycle.man \
+-		  quasicrystal.man unknownpleasures.man geodesic.man
++		  quasicrystal.man unknownpleasures.man geodesic.man tetris.man
+ MEN		= @GL_MEN@
+ RETIRED_MEN	= glforestfire.man
+ EXTRAS		= README Makefile.in dxf2gl.pl vrml2gl.pl wfront2gl.pl \
+@@ -689,6 +689,10 @@
+ stonerview:	stonerview.o	$(STONER_OBJS) $(HACK_TRACK_OBJS)
+ 	$(CC_HACK) -o $@ $@.o	$(STONER_OBJS) $(HACK_TRACK_OBJS) $(HACK_LIBS)
  
 +tetris:	tetris.o	$(DB_OBJS)
 +	$(CC_HACK) -o $@ $@.o	$(DB_OBJS) $(HACK_LIBS)
 +
 +
+ 
+ molecules.h:
+ 	@echo "building molecules.h from $(HACK_SRC)/images/molecules/*.pdb"; \
 
 
  ##############################################################################
@@ -1299,3 +1311,27 @@ diff -ruN xscreensaver-5.26.orig/hacks/glx/tetris.man xscreensaver-5.26/hacks/gl
 +.SH AUTHOR
 +Vivien HENRIET <bubuabu@bubuabu.org>, 1-October-2013.
 + 
+
+diff -ruN xscreensaver-5.26.orig/driver/XScreenSaver.ad.in xscreensaver-5.26/driver/XScreenSaver.ad.in
+--- xscreensaver-5.26.orig/driver/XScreenSaver.ad.in	2013-12-09 12:01:40.000000000 +0100
++++ xscreensaver-5.26/driver/XScreenSaver.ad.in	2014-03-08 22:17:15.843647589 +0100
+@@ -360,8 +360,8 @@
+ 				hexadrop -root				    \n\
+ @GL_KLUDGE@ GL: 				kaleidocycle -root			    \n\
+ @GL_KLUDGE@ GL: 				quasicrystal -root			    \n\
+-@GL_KLUDGE@ GL: 				unknownpleasures -root			    \n
+-
++@GL_KLUDGE@ GL: 				unknownpleasures -root			    \n\
++@GL_KLUDGE@ GL:					tetris -root				    \n
+ 
+ 
+ !=============================================================================
+@@ -502,6 +502,7 @@
+ *hacks.whirlwindwarp.name:  WhirlWindWarp
+ *hacks.xanalogtv.name:      XAnalogTV
+ *hacks.xrayswarm.name:      XRaySwarm
++*hacks.tetris.name:         Tetris
+ 
+ ! obsolete, but still used by xscreensaver-demo-Xm.
+ *hacks.documentation.isInstalled: True
+
